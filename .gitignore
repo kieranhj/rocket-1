@@ -6,3 +6,8 @@ t2-output
 *.swp
 *.swo
 .rocket-recents.txt
+.vs/emoon-rocket/v16/.suo
+*.db
+*.sqlite
+out
+.vs/

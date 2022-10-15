@@ -287,6 +287,9 @@ void Editor_create() {
     s_editorData.trackData.isPlaying = false;
     s_editorData.trackData.isLooping = false;
 
+	s_editorData.trackViewInfo.hexidecimal = true;
+	s_editorData.trackViewInfo.wordSize = VIEW_LONG;
+
     Music_init();
 
     Emgui_setDefaultFont();
@@ -333,7 +336,7 @@ static int drawConnectionStatus(int posX, int sizeY) {
 
 static int drawCurrentValue(int posX, int sizeY) {
     char valueText[256];
-    float value = 0.0f;
+    int value = 0;
     int active_track = 0;
     int current_row = 0;
     const char* str = "---";
@@ -354,21 +357,24 @@ static int drawCurrentValue(int posX, int sizeY) {
                 case KEY_LINEAR:
                     str = "linear";
                     break;
-                case KEY_SMOOTH:
-                    str = "smooth";
+                case KEY_SHORT:
+                    str = "short";
                     break;
-                case KEY_RAMP:
-                    str = "ramp";
+                case KEY_BYTE:
+                    str = "byte";
                     break;
-                default:
+				case KEY_NIBBLE:
+					str = "nibble";
+					break;
+				default:
                     break;
             }
         }
 
-        value = (float)sync_get_val(track, current_row);
+        value = sync_get_val(track, current_row);
     }
 
-    my_ftoa(value, valueText, 256, 6);
+    my_itoa(value, valueText, 256, s_editorData.trackViewInfo.hexidecimal, s_editorData.trackViewInfo.wordSize);
     Emgui_drawText(valueText, posX + 4, sizeY - 15, Emgui_color32(160, 160, 160, 255));
     Emgui_drawBorder(Emgui_color32(10, 10, 10, 255), Emgui_color32(10, 10, 10, 255), posX, sizeY - 17, 80, 15);
     Emgui_drawText(str, posX + 85, sizeY - 15, Emgui_color32(160, 160, 160, 255));
@@ -677,9 +683,9 @@ static void scaleOrBiasSelection(float value, BiasOperation biasOp) {
             newKey = t->keys[idx];
 
             if (biasOp == BiasOperation_Bias)
-                newKey.value += value;
+                newKey.value += (int)(value * 256);
             else
-                newKey.value *= value;
+                newKey.value = (int)(value * newKey.value);
 
             Commands_updateKey(track, &newKey);
         }
@@ -707,7 +713,7 @@ static char s_editBuffer[512];
 static bool is_editing = false;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static void doEdit(int track, int row_pos, float value) {
+static void doEdit(int track, int row_pos, int value) {
     struct sync_track* t;
     struct track_key key;
 
@@ -741,7 +747,7 @@ static void endEditing() {
         return;
 
     if (strcmp(s_editBuffer, ""))
-        doEdit(getActiveTrack(), getRowPos(), (float)my_atof(s_editBuffer));
+		doEdit(getActiveTrack(), getRowPos(), my_atoi(s_editBuffer));// (float)my_atof(s_editBuffer));
 
     is_editing = false;
     s_editorData.trackData.editText = 0;
@@ -1311,7 +1317,7 @@ static void enterCurrentValue(struct sync_track* track, int activeTrack, int row
 
     if (!track->keys) {
         key.row = rowPos;
-        key.value = 0.0f;
+        key.value = 0;
         key.type = 0;
 
         Commands_addOrUpdateKey(activeTrack, &key);
@@ -1327,10 +1333,10 @@ static void enterCurrentValue(struct sync_track* track, int activeTrack, int row
     key.row = rowPos;
 
     if (track->num_keys > 0) {
-        key.value = (float)sync_get_val(track, rowPos);
+        key.value = sync_get_val(track, rowPos);
         key.type = track->keys[emaxi(idx - 1, 0)].type;
     } else {
-        key.value = 0.0f;
+        key.value = 0;
         key.type = 0;
     }
 
@@ -1622,6 +1628,20 @@ static void onClearLoopmarks() {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+static void onToggleHexDec() {
+	s_editorData.trackViewInfo.hexidecimal = !s_editorData.trackViewInfo.hexidecimal;
+	Editor_updateTrackScroll();	// Refresh view.
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static void onCycleWordSize() {
+	s_editorData.trackViewInfo.wordSize++;
+	if (s_editorData.trackViewInfo.wordSize >= VIEW_NIBBLE) s_editorData.trackViewInfo.wordSize = VIEW_LONG;
+	Editor_updateTrackScroll();	// Refresh view.
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void onTab() {
     Emgui_setFirstControlFocus();
 }
@@ -1713,10 +1733,10 @@ void Editor_menuEvent(int menuItem) {
             onPaste(false);
             break;
         case EDITOR_MENU_MOVE_UP:
-            onMoveSelection(true);
+            onMoveSelection(false);
             break;
         case EDITOR_MENU_MOVE_DOWN:
-            onMoveSelection(false);
+            onMoveSelection(true);
             break;
         case EDITOR_MENU_OFS_UP_1:
             onOffsetTrack(1);
@@ -1746,6 +1766,7 @@ void Editor_menuEvent(int menuItem) {
             onSelectTrack();
             break;
 
+#ifndef _DISABLE_BIAS_AND_SCALE
         case EDITOR_MENU_BIAS_P_001:
             biasSelection(0.01f);
             break;
@@ -1819,7 +1840,7 @@ void Editor_menuEvent(int menuItem) {
         case EDITOR_MENU_SCALE_001:
             scaleSelection(0.01f);
             break;
-
+#endif
         case EDITOR_MENU_INTERPOLATION:
             onInterpolation();
             break;
@@ -1898,7 +1919,13 @@ void Editor_menuEvent(int menuItem) {
         case EDITOR_MENU_TAB:
             onTab();
             break;
-    }
+		case EDITOR_MENU_TOGGLE_HEXDEC:
+			onToggleHexDec();
+			break;
+		case EDITOR_MENU_CYCLE_SIZE:
+			onCycleWordSize();
+			break;
+	}
 
     Editor_update();
 }
@@ -1921,7 +1948,7 @@ static bool doEditing(int key) {
     if ((key == '.' || key == EMGUI_KEY_BACKSPACE) && !is_editing)
         return false;
 
-    if ((key >= '0' && key <= '9') || key == '.' || key == '-' || key == EMGUI_KEY_BACKSPACE) {
+    if ((key >= '0' && key <= '9') || (key >= 'A' && key <= 'F') || (key >= 'a' && key <= 'f') || key == '.' || key == '-' || key == EMGUI_KEY_BACKSPACE) {
         if (!is_editing) {
             memset(s_editBuffer, 0, sizeof(s_editBuffer));
             is_editing = true;
@@ -2109,7 +2136,7 @@ static int processCommands() {
 
                     viewInfo->selectStartRow = viewInfo->selectStopRow = viewInfo->rowPos = newRow;
 
-                    doEdit(track, newRow, v.f);
+                    doEdit(track, newRow, v.i);
                 }
 
                 ret = 1;

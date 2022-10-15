@@ -102,7 +102,7 @@ static void parseXml(mxml_node_t* rootNode, TrackData* trackData) {
                 if (!strcmp("track", element_name)) {
                     int i;
                     struct sync_track* track;
-                    float muteValue = 0.0f;
+                    int muteValue = 0;
                     Track* t;
 
                     // TODO: Create the new track/channel here
@@ -140,8 +140,8 @@ static void parseXml(mxml_node_t* rootNode, TrackData* trackData) {
                         }
                     }
 
-                    if (mute_value_text)
-                        muteValue = (float)my_atof(mute_value_text);
+					if (mute_value_text)
+						muteValue = atoi(mute_value_text);// my_atof(mute_value_text);
 
                     // If we already have this track loaded we delete all the existing keys
 
@@ -175,7 +175,7 @@ static void parseXml(mxml_node_t* rootNode, TrackData* trackData) {
                     const char* interpolation = mxmlElementGetAttr(node, "interpolation");
 
                     k.row = atoi(row);
-                    k.value = (float)(my_atof(value));
+					k.value = atoi(value);// my_atof(value);
                     k.type = (atoi(interpolation));
 
                     // if track is muted we load the data into the muted data and not the regular keys
@@ -327,7 +327,7 @@ static void saveTrackData(mxml_node_t* track, struct track_key* keys, int count)
     for (i = 0; i < count; ++i) {
         mxml_node_t* key = mxmlNewElement(track, "key");
         setElementInt(key, "row", "%d", keys[i].row);
-        setElementFloat(key, "value", keys[i].value);
+        setElementInt(key, "value", "%08x", keys[i].value);
         setElementInt(key, "interpolation", "%d", (int)keys[i].type);
     }
 }
@@ -418,7 +418,7 @@ int LoadSave_saveRocketXML(const text_t* path, TrackData* trackData) {
         setElementInt(track, "color", "%08x", trackData->tracks[p].color);
 
         if (isMuted) {
-            setElementFloat(track, "muteValue", t->keys[0].value);
+            setElementInt(track, "muteValue", "%08x", t->keys[0].value);
             saveTrackData(track, trackData->tracks[p].muteBackup, trackData->tracks[p].muteKeyCount);
         } else {
             saveTrackData(track, t->keys, t->num_keys);

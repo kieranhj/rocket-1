@@ -360,8 +360,7 @@ static void sendSetKeyCommandIndex(uint32_t index, const struct track_key* key) 
     track = htonl(index);
     row = htonl(key->row);
 
-    v.f = key->value;
-    v.i = htonl(v.i);
+    v.i = htonl(key->value);
 
     assert(key->type < KEY_TYPE_COUNT);
 

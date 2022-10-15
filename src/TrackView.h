@@ -23,6 +23,8 @@ typedef struct TrackViewInfo {
     int selectStopRow;
     int loopStart;
     int loopEnd;
+	bool hexidecimal;
+	int wordSize;
 
 } TrackViewInfo;
 

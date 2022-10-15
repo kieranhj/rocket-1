@@ -534,7 +534,7 @@ static void toggleMute(void* userData) {
         struct track_key defKey;
         int i;
         size_t keysSize = sizeof(struct track_key) * data->syncTrack->num_keys;
-        float currentValue = (float)sync_get_val(data->syncTrack, data->row);
+        int currentValue = sync_get_val(data->syncTrack, data->row);
 
         data->track->disabled = true;
 

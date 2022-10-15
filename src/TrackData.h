@@ -11,6 +11,14 @@ enum {
     EDITOR_MAX_BOOKMARKS = 32 * 1024,
 };
 
+enum {
+	VIEW_LONG,
+	VIEW_SHORT,
+	VIEW_CHAR,
+	VIEW_NIBBLE,
+	VIEW_MAX
+};
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 typedef struct MusicData {
@@ -122,3 +130,6 @@ void TrackData_setActiveTrack(TrackData* trackData, int track);
 // utility functions
 double my_atof(const char* s);
 void my_ftoa(float f, char* s, int n, int digits);
+
+int my_atoi(const char* s);
+void my_itoa(int v, char* s, int n, bool hex, int wordSize);

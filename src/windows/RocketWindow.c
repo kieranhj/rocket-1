@@ -576,7 +576,9 @@ LRESULT CALLBACK WndProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam
                 case EDITOR_MENU_TOGGLE_BOOKMARK:
                 case EDITOR_MENU_CLEAR_BOOKMARKS:
                 case EDITOR_MENU_TOGGLE_LOOPMARK:
-                case EDITOR_MENU_CLEAR_LOOPMARKS: {
+                case EDITOR_MENU_CLEAR_LOOPMARKS:
+				case EDITOR_MENU_TOGGLE_HEXDEC: 
+				case EDITOR_MENU_CYCLE_SIZE: {
                     Editor_menuEvent(LOWORD(wParam));
                     break;
                 }

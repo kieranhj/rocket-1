@@ -26,7 +26,7 @@
 
 #define font_size 8
 int track_size_folded = 20;
-int min_track_size = 100;
+int min_track_size = 120;
 int name_adjust = font_size * 2;
 int font_size_half = font_size / 2;
 int colorbar_adjust = ((font_size * 3) + 2);
@@ -255,13 +255,16 @@ static void renderInterpolation(const struct TrackInfo* info, struct sync_track*
         case KEY_LINEAR:
             color = Emgui_color32(255, 0, 0, 255);
             break;
-        case KEY_SMOOTH:
+        case KEY_SHORT:
             color = Emgui_color32(0, 255, 0, 255);
             break;
-        case KEY_RAMP:
+        case KEY_BYTE:
             color = Emgui_color32(0, 0, 255, 255);
             break;
-        default:
+		case KEY_NIBBLE:
+			color = Emgui_color32(255, 0, 255, 255);
+			break;
+		default:
             break;
     }
 
@@ -284,8 +287,8 @@ static void renderText(const struct TrackInfo* info, struct sync_track* track, i
     } else {
         if (idx >= 0) {
             char temp[256];
-            float value = track->keys[idx].value;
-            my_ftoa(value, temp, 256, 2);
+            int value = track->keys[idx].value;
+            my_itoa(value, temp, 256, info->viewInfo->hexidecimal, info->viewInfo->wordSize);
 
             Emgui_drawText(temp, x, y - font_size_half, Emgui_color32(255, 255, 255, 255));
         } else {
@@ -306,7 +309,7 @@ static int getTrackSize(TrackViewInfo* viewInfo, Track* track) {
         track->width = emaxi(track->width, min_track_size);
     }
 
-    return track->width;
+	return track->width + ((!viewInfo->hexidecimal && viewInfo->wordSize >= VIEW_CHAR) ? 20 : 0);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

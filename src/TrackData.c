@@ -372,13 +372,36 @@ double my_atof(const char* s) {
     return (double)value / (double)radix;
 }
 
+int my_atoi(const char* s) {
+	return strtol(s, NULL, 16);
+}
+
 void my_ftoa(float f, char* s, int n, int digits) {
-    char fmt[5] = "%.0f";
-    fmt[2] = (char)(digits + '0');
-    snprintf(s, n, fmt, f);
-    for (; *s; ++s) {
-        if (*s == ',') {
-            *s = '.';
-        }
-    }
+	char fmt[5] = "%.0f";
+	fmt[2] = (char)(digits + '0');
+	snprintf(s, n, fmt, f);
+	for (; *s; ++s) {
+		if (*s == ',') {
+			*s = '.';
+		}
+	}
+}
+
+void my_itoa(int v, char* s, int n, bool hex, int wordSize) {
+	switch (wordSize) {
+	default:
+	case VIEW_LONG:
+		snprintf(s, n, hex ? "$ %08x" : "%010d", v);
+		break;
+	case VIEW_SHORT:
+		snprintf(s, n, hex ? "$ %04x %04x" : "%05d,%05d", (v >> 16), (v & 0xffff));
+		break;
+	case VIEW_CHAR:
+		snprintf(s, n, hex ? "$ %02x %02x %02x %02x" : "%03d,%03d,%03d,%03d", (v >> 24), (v>>16)&0xff,(v>>8)&0xff, v&0xff);
+		break;
+	case VIEW_NIBBLE:
+		snprintf(s, n, hex ? "$%01x $%01x $%01x $%01x $%01x $%01x $%01x $%01x" : "%02d,%02d,%02d,%02d,%02d,%02d,%02d,%02d",
+			(v >> 28), (v >> 24) & 0xf, (v >> 20) & 0xf, (v >> 16) & 0xf, (v >> 12) & 0xf, (v >> 8) & 0xf, (v >> 4) & 0xf, v & 0xf);
+		break;
+	}
 }
