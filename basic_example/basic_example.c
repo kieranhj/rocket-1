@@ -6,6 +6,7 @@
 #include <unistd.h>
 #endif
 #include "../external/rocket/lib/sync.h"
+#include "../external/rocket/lib/track.h"
 
 static struct sync_device* device;
 #if !defined(SYNC_PLAYER)
@@ -120,6 +121,11 @@ static const char* s_trackNames[] = {
     "group1#track0", "group1#track1", "group1#track2",
 };
 
+static const enum track_type s_trackTypes[] = {
+	TRACK_FLOAT, TRACK_FLOAT, TRACK_EVENT, TRACK_EVENT,
+	TRACK_COLOUR, TRACK_COLOUR, TRACK_FLOAT
+};
+
 static const struct sync_track* s_tracks[sizeof_array(s_trackNames)];
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -131,7 +137,7 @@ int main() {
         return -1;
 
     for (i = 0; i < sizeof_array(s_trackNames); ++i)
-        s_tracks[i] = sync_get_track(device, s_trackNames[i]);
+        s_tracks[i] = sync_get_track(device, s_trackNames[i], s_trackTypes[i]);
 
     for (;;) {
         float row_f;
@@ -140,10 +146,25 @@ int main() {
 
         row_f = ms_to_row_f(curtime_ms, rps);
 
-        printf("current time %d\n", curtime_ms);
+        printf("current time %d\t", curtime_ms);
 
-        for (i = 0; i < sizeof_array(s_trackNames); ++i)
-            printf("%s %f\n", s_trackNames[i], sync_get_val(s_tracks[i], row_f));
+		for (i = 0; i < sizeof_array(s_trackNames); ++i) {
+			switch (s_trackTypes[i]) {
+			case TRACK_FLOAT:
+			default:
+				printf("%s %f\t", s_trackNames[i], sync_get_val(s_tracks[i], row_f));
+				break;
+
+			case TRACK_EVENT:
+				printf("%s 0x%02x\t", s_trackNames[i], sync_get_event(s_tracks[i], row_f));
+				break;
+
+			case TRACK_COLOUR:
+				printf("%s 0x%04x\t", s_trackNames[i], sync_get_colour(s_tracks[i], row_f));
+				break;
+			}
+		}
+		printf("\n");
 #if defined(WIN32)
         Sleep(16);
 #else

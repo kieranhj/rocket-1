@@ -188,6 +188,11 @@ static bool canEditCurrentTrack() {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+static bool canHexCurrentTrack() {
+	return getTrackData()->tracks[getActiveTrack()].type != TRACK_FLOAT;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static inline void setRowPos(int pos) {
     s_editorData.trackViewInfo.rowPos = pos;
     RemoteConnection_sendSetRowCommand(pos);
@@ -333,7 +338,7 @@ static int drawConnectionStatus(int posX, int sizeY) {
 
 static int drawCurrentValue(int posX, int sizeY) {
     char valueText[256];
-    float value = 0.0f;
+	float value = 0.0f;
     int active_track = 0;
     int current_row = 0;
     const char* str = "---";
@@ -365,10 +370,27 @@ static int drawCurrentValue(int posX, int sizeY) {
             }
         }
 
-        value = (float)sync_get_val(track, current_row);
+		switch (track->type) {
+		case TRACK_FLOAT:
+		default:
+			value = (float)sync_get_val(track, current_row);
+			my_ftoa(value, valueText, 256, 6);
+			break;
+
+		case TRACK_EVENT:
+			str = "event";
+			unsigned char event = sync_get_event(track, current_row);
+			sprintf(valueText, "$%02x", event);
+			break;
+
+		case TRACK_COLOUR:
+			str = "colour";
+			unsigned short colour = sync_get_colour(track, current_row);
+			sprintf(valueText, "c%04x", colour);
+			break;
+		}
     }
 
-    my_ftoa(value, valueText, 256, 6);
     Emgui_drawText(valueText, posX + 4, sizeY - 15, Emgui_color32(160, 160, 160, 255));
     Emgui_drawBorder(Emgui_color32(10, 10, 10, 255), Emgui_color32(10, 10, 10, 255), posX, sizeY - 17, 80, 15);
     Emgui_drawText(str, posX + 85, sizeY - 15, Emgui_color32(160, 160, 160, 255));
@@ -668,6 +690,9 @@ static void scaleOrBiasSelection(float value, BiasOperation biasOp) {
         if (trackData->tracks[track].disabled)
             continue;
 
+		if (t->type != TRACK_FLOAT)
+			continue;
+
         for (row = selectTop; row <= selectBottom; ++row) {
             struct track_key newKey;
             int idx = sync_find_key(t, row);
@@ -677,9 +702,9 @@ static void scaleOrBiasSelection(float value, BiasOperation biasOp) {
             newKey = t->keys[idx];
 
             if (biasOp == BiasOperation_Bias)
-                newKey.value += value;
+                newKey.value.val += value;
             else
-                newKey.value *= value;
+                newKey.value.val *= value;
 
             Commands_updateKey(track, &newKey);
         }
@@ -707,14 +732,14 @@ static char s_editBuffer[512];
 static bool is_editing = false;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static void doEdit(int track, int row_pos, float value) {
+static void doEdit(int track, int row_pos, key_value value) {
     struct sync_track* t;
     struct track_key key;
 
     t = getTracks()[track];
 
     key.row = row_pos;
-    key.value = value;
+	key.value = value;
     key.type = 0;
 
     if (t->num_keys > 0) {
@@ -740,8 +765,26 @@ static void endEditing() {
     if (!is_editing || !getTracks())
         return;
 
-    if (strcmp(s_editBuffer, ""))
-        doEdit(getActiveTrack(), getRowPos(), (float)my_atof(s_editBuffer));
+	if (strcmp(s_editBuffer, "")) {
+		struct sync_track* t = getTracks()[getActiveTrack()];
+		key_value v;
+
+		switch (t->type) {
+		case TRACK_FLOAT:
+		default:
+			v.val = (float)my_atof(s_editBuffer);
+			break;
+
+		case TRACK_EVENT:
+			v.event = (unsigned char)strtoul(s_editBuffer, 0, 16);
+			break;
+
+		case TRACK_COLOUR:
+			v.colour = (unsigned short)strtoul(s_editBuffer, 0, 16);
+			break;
+		}
+		doEdit(getActiveTrack(), getRowPos(), v);
+	}
 
     is_editing = false;
     s_editorData.trackData.editText = 0;
@@ -1072,19 +1115,36 @@ static void onMoveSelection(bool down) {
 
     for (track = selectLeft; track <= selectRight; ++track) {
         struct sync_track* t = tracks[track];
-        for (row = selectTop; row <= selectBottom; ++row) {
-            struct track_key newKey;
+		if (down) {
+			for (row = selectBottom; row >= selectTop; --row) {
+				struct track_key newKey;
 
-            int idx = sync_find_key(t, row);
-            if (idx < 0)
-                continue;
+				int idx = sync_find_key(t, row);
+				if (idx < 0)
+					continue;
 
-            newKey = t->keys[idx];
-            newKey.row = down ? newKey.row + 1 : newKey.row - 1;
+				newKey = t->keys[idx];
+				newKey.row = down ? newKey.row + 1 : newKey.row - 1;
 
-            Commands_deleteKey(track, row);
-            Commands_addKey(track, &newKey);
-        }
+				Commands_deleteKey(track, row);
+				Commands_addKey(track, &newKey);
+			}
+		}
+		else {
+			for (row = selectTop; row <= selectBottom; ++row) {
+				struct track_key newKey;
+
+				int idx = sync_find_key(t, row);
+				if (idx < 0)
+					continue;
+
+				newKey = t->keys[idx];
+				newKey.row = down ? newKey.row + 1 : newKey.row - 1;
+
+				Commands_deleteKey(track, row);
+				Commands_addKey(track, &newKey);
+			}
+		}
     }
 
     buffer_width = (selectRight - selectLeft) + 1;
@@ -1241,6 +1301,20 @@ static void onInterpolation() {
     newKey = track->keys[idx];
     newKey.type = ((newKey.type + 1) % KEY_TYPE_COUNT);
 
+	switch (track->type) {
+	case TRACK_FLOAT:
+	default:
+		break;
+
+	case TRACK_EVENT:
+		newKey.type = KEY_STEP;
+		break;
+
+	case TRACK_COLOUR:
+		if (newKey.type > KEY_LINEAR) newKey.type = KEY_STEP;
+		break;
+	}
+
     Commands_addOrUpdateKey(getActiveTrack(), &newKey);
     updateNeedsSaving();
 }
@@ -1311,7 +1385,20 @@ static void enterCurrentValue(struct sync_track* track, int activeTrack, int row
 
     if (!track->keys) {
         key.row = rowPos;
-        key.value = 0.0f;
+		switch (track->type) {
+		case TRACK_FLOAT:
+		default:
+			key.value.val = 0.0f;
+			break;
+
+		case TRACK_EVENT:
+			key.value.event = 0;
+			break;
+
+		case TRACK_COLOUR:
+			key.value.colour = 0x0000;
+			break;
+		}
         key.type = 0;
 
         Commands_addOrUpdateKey(activeTrack, &key);
@@ -1327,11 +1414,37 @@ static void enterCurrentValue(struct sync_track* track, int activeTrack, int row
     key.row = rowPos;
 
     if (track->num_keys > 0) {
-        key.value = (float)sync_get_val(track, rowPos);
+		switch (track->type) {
+		case TRACK_FLOAT:
+		default:
+			key.value.val = (float)sync_get_val(track, rowPos);
+			break;
+
+		case TRACK_EVENT:
+			key.value.event = sync_get_event(track, rowPos);
+			break;
+
+		case TRACK_COLOUR:
+			key.value.colour = sync_get_colour(track, rowPos);
+			break;
+		}
         key.type = track->keys[emaxi(idx - 1, 0)].type;
     } else {
-        key.value = 0.0f;
-        key.type = 0;
+		switch (track->type) {
+		case TRACK_FLOAT:
+		default:
+			key.value.val = 0.0f;
+			break;
+
+		case TRACK_EVENT:
+			key.value.event = 0;
+			break;
+
+		case TRACK_COLOUR:
+			key.value.colour = 0x0000;
+			break;
+		}
+		key.type = 0;
     }
 
     Commands_addOrUpdateKey(activeTrack, &key);
@@ -1713,10 +1826,10 @@ void Editor_menuEvent(int menuItem) {
             onPaste(false);
             break;
         case EDITOR_MENU_MOVE_UP:
-            onMoveSelection(true);
+            onMoveSelection(false);
             break;
         case EDITOR_MENU_MOVE_DOWN:
-            onMoveSelection(false);
+            onMoveSelection(true);
             break;
         case EDITOR_MENU_OFS_UP_1:
             onOffsetTrack(1);
@@ -1921,7 +2034,9 @@ static bool doEditing(int key) {
     if ((key == '.' || key == EMGUI_KEY_BACKSPACE) && !is_editing)
         return false;
 
-    if ((key >= '0' && key <= '9') || key == '.' || key == '-' || key == EMGUI_KEY_BACKSPACE) {
+    if ((key >= '0' && key <= '9') || key == '.' || key == '-' || key == EMGUI_KEY_BACKSPACE
+		|| (canHexCurrentTrack() && (key >= 'A' && key <='F') )
+		) {
         if (!is_editing) {
             memset(s_editBuffer, 0, sizeof(s_editBuffer));
             is_editing = true;
@@ -2042,6 +2157,7 @@ static int processCommands() {
         switch (cmd) {
             case GET_TRACK: {
                 char trackName[4096];
+				enum track_type type;
 
                 reset_tracks = true;
 
@@ -2056,11 +2172,15 @@ static int processCommands() {
                 if (!RemoteConnection_recv(trackName, strLen, 0))
                     return 0;
 
+				if (!RemoteConnection_recv((char*)&type, sizeof(type), 0))
+					return 0;
+				type = ntohl(type);
+
                 // rlog(R_INFO, "Got trackname %s (%d) from demo\n", trackName, strLen);
 
                 // find track
 
-                serverIndex = TrackData_createGetTrack(&s_editorData.trackData, trackName);
+                serverIndex = TrackData_createGetTrack(&s_editorData.trackData, trackName, type);
                 // if it's the first one we get, select it too
                 if (serverIndex == 0)
                     setActiveTrack(0);
@@ -2095,7 +2215,7 @@ static int processCommands() {
                 unsigned char type;
                 uint32_t track;
                 union {
-                    float f;
+                    key_value f;
                     uint32_t i;
                 } v;
 

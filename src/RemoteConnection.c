@@ -353,7 +353,7 @@ static void sendSetKeyCommandIndex(uint32_t index, const struct track_key* key) 
     uint8_t cmd = SET_KEY;
 
     union {
-        float f;
+        key_value f;
         uint32_t i;
     } v;
 

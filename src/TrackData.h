@@ -48,6 +48,7 @@ typedef struct Track {
     bool folded;
     bool selected;
     bool active;
+	enum track_type type;
 
 } Track;
 
@@ -111,7 +112,7 @@ int TrackData_getPrevLoopmark(TrackData* trackData, int row);
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Will get the get the track if it exists else create it
 
-int TrackData_createGetTrack(TrackData* trackData, const char* name);
+int TrackData_createGetTrack(TrackData* trackData, const char* name, enum track_type type);
 uint32_t TrackData_getNextColor(TrackData* trackData);
 void TrackData_linkGroups(TrackData* trackData);
 void TrackData_linkTrack(int index, const char* name, TrackData* trackData);

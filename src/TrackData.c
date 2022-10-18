@@ -17,7 +17,7 @@ int sync_find_track(struct sync_track** tracks, size_t num_tracks, const char* n
     return -1; /* not found */
 }
 
-int sync_create_track(struct sync_track*** tracksPtr, size_t* num_tracksPtr, const char* name) {
+int sync_create_track(struct sync_track*** tracksPtr, size_t* num_tracksPtr, const char* name, enum track_type type) {
     struct sync_track* t;
     struct sync_track** tracks = *tracksPtr;
     size_t num_tracks = *num_tracksPtr;
@@ -27,6 +27,7 @@ int sync_create_track(struct sync_track*** tracksPtr, size_t* num_tracksPtr, con
     t->name = strdup(name);
     t->keys = NULL;
     t->num_keys = 0;
+	t->type = type;
 
     tracks = realloc(tracks, sizeof(tracks[0]) * (num_tracks + 1));
     tracks[num_tracks] = t;
@@ -37,10 +38,10 @@ int sync_create_track(struct sync_track*** tracksPtr, size_t* num_tracksPtr, con
     return (int)num_tracks;
 }
 
-int TrackData_createGetTrack(TrackData* trackData, const char* name) {
+int TrackData_createGetTrack(TrackData* trackData, const char* name, enum track_type type) {
     int index = sync_find_track(trackData->syncTracks, trackData->num_syncTracks, name);
     if (index < 0) {
-        index = sync_create_track(&trackData->syncTracks, &trackData->num_syncTracks, name);
+        index = sync_create_track(&trackData->syncTracks, &trackData->num_syncTracks, name, type);
         memset(&trackData->tracks[index], 0, sizeof(Track));
         trackData->tracks[index].index = index;
         trackData->tracks[index].color = TrackData_getNextColor(trackData);
@@ -134,6 +135,7 @@ void TrackData_linkTrack(int index, const char* name, TrackData* trackData) {
         group->trackCount = 1;
         track->group = group;
         track->displayName = strdup(name);
+		track->type = trackData->syncTracks[index]->type;
         group->groupIndex = trackData->groupCount - 1;
 
         // printf("Linking track %s to group %s\n", name, name);
@@ -158,6 +160,7 @@ void TrackData_linkTrack(int index, const char* name, TrackData* trackData) {
 
     track->group = group;
     track->displayName = strdup(&name[found + 1]);
+	track->type = trackData->syncTracks[index]->type;
 
     // printf("groupDisplayName %s\n", group->displayName);
 }

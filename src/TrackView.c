@@ -27,6 +27,8 @@
 #define font_size 8
 int track_size_folded = 20;
 int min_track_size = 100;
+int min_event_size = 40;
+int min_colour_size = 80;
 int name_adjust = font_size * 2;
 int font_size_half = font_size / 2;
 int colorbar_adjust = ((font_size * 3) + 2);
@@ -82,6 +84,27 @@ extern void Dialog_showColorPicker(uint32_t* color);
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void TrackView_init() {
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static int getTrackMinSize(const Track* trackData) {
+	if (!trackData)
+		return min_track_size;
+
+	switch (trackData->type) {
+	case TRACK_FLOAT:
+	default:
+		return min_track_size;
+
+	case TRACK_EVENT:
+		return min_event_size;
+		break;
+
+	case TRACK_COLOUR:
+		return min_colour_size;
+		break;
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -284,8 +307,24 @@ static void renderText(const struct TrackInfo* info, struct sync_track* track, i
     } else {
         if (idx >= 0) {
             char temp[256];
-            float value = track->keys[idx].value;
-            my_ftoa(value, temp, 256, 2);
+
+			switch (track->type) {
+			case TRACK_FLOAT:
+			default:
+			{
+				float value = track->keys[idx].value.val;
+				my_ftoa(value, temp, 256, 2);
+			}
+			break;
+
+			case TRACK_EVENT:
+				sprintf(temp, "$%02x", track->keys[idx].value.event);
+				break;
+
+			case TRACK_COLOUR:
+				sprintf(temp, "c%04x", track->keys[idx].value.colour);
+				break;
+			}
 
             Emgui_drawText(temp, x, y - font_size_half, Emgui_color32(255, 255, 255, 255));
         } else {
@@ -298,12 +337,12 @@ static void renderText(const struct TrackInfo* info, struct sync_track* track, i
 
 static int getTrackSize(TrackViewInfo* viewInfo, Track* track) {
     if (track->folded)
-        return track_size_folded;
+         return track_size_folded;
 
     if (track->width == 0) {
         Emgui_setFont(viewInfo->smallFontId);
         track->width = (Emgui_getTextSize(track->displayName) & 0xffff) + 31;
-        track->width = emaxi(track->width, min_track_size);
+        track->width = emaxi(track->width, getTrackMinSize(track));
     }
 
     return track->width;
@@ -377,14 +416,15 @@ static int renderChannel(struct TrackInfo* info, int startX, Track* trackData, b
     const int yEnd = (info->endSizeY - info->startY) + 40;
 
     if (!valuesOnly) {
+		int minSize = getTrackMinSize(trackData);
         drawFoldButton(startX + 6, info->startY - (font_size + 5), &trackData->folded, trackData->active);
 
         folded = trackData->folded;
 
-        if (info->trackData->syncTracks)
-            track = info->trackData->syncTracks[trackData->index];
+		if (info->trackData->syncTracks)
+			track = info->trackData->syncTracks[trackData->index];
 
-        size = renderName(trackData->displayName, startX, info->startY - (font_size * 2), min_track_size, folded,
+        size = renderName(trackData->displayName, startX, info->startY - (font_size * 2), minSize, folded,
                           trackData->active);
 
         if (folded) {

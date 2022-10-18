@@ -6,3 +6,5 @@ t2-output
 *.swp
 *.swo
 .rocket-recents.txt
+build/
+.vs/

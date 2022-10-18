@@ -102,7 +102,7 @@ static void parseXml(mxml_node_t* rootNode, TrackData* trackData) {
                 if (!strcmp("track", element_name)) {
                     int i;
                     struct sync_track* track;
-                    float muteValue = 0.0f;
+                    key_value muteValue;
                     Track* t;
 
                     // TODO: Create the new track/channel here
@@ -111,9 +111,12 @@ static void parseXml(mxml_node_t* rootNode, TrackData* trackData) {
                     const char* color_text = mxmlElementGetAttr(node, "color");
                     const char* folded_text = mxmlElementGetAttr(node, "folded");
                     const char* mute_key_count_text = mxmlElementGetAttr(node, "muteKeyCount");
-                    const char* mute_value_text = mxmlElementGetAttr(node, "muteValue");
+                    const char* mute_val_text = mxmlElementGetAttr(node, "mute_val");
+					const char* mute_event_text = mxmlElementGetAttr(node, "mute_event");
+					const char* mute_colour_text = mxmlElementGetAttr(node, "mute_colour");
+					const char* type_text = mxmlElementGetAttr(node, "type");
 
-                    track_index = TrackData_createGetTrack(trackData, track_name);
+					track_index = TrackData_createGetTrack(trackData, track_name, strtoul(type_text, 0, 10));
 
                     t = &trackData->tracks[track_index];
                     track = trackData->syncTracks[track_index];
@@ -140,8 +143,15 @@ static void parseXml(mxml_node_t* rootNode, TrackData* trackData) {
                         }
                     }
 
-                    if (mute_value_text)
-                        muteValue = (float)my_atof(mute_value_text);
+					muteValue.val = 0.0f;
+                    if (mute_val_text)
+                        muteValue.val = (float)my_atof(mute_val_text);
+
+					if (mute_event_text)
+						muteValue.event = (unsigned char)strtoul(mute_event_text, 0, 16);
+
+					if (mute_colour_text)
+						muteValue.colour = (unsigned short)strtoul(mute_colour_text, 0, 16);
 
                     // If we already have this track loaded we delete all the existing keys
 
@@ -171,12 +181,26 @@ static void parseXml(mxml_node_t* rootNode, TrackData* trackData) {
                     Track* t = &trackData->tracks[track_index];
 
                     const char* row = mxmlElementGetAttr(node, "row");
-                    const char* value = mxmlElementGetAttr(node, "value");
-                    const char* interpolation = mxmlElementGetAttr(node, "interpolation");
+                    const char* value = mxmlElementGetAttr(node, "val");
+					const char* event = mxmlElementGetAttr(node, "event");
+					const char* colour = mxmlElementGetAttr(node, "colour");
+					const char* interpolation = mxmlElementGetAttr(node, "interpolation");
 
                     k.row = atoi(row);
-                    k.value = (float)(my_atof(value));
-                    k.type = (atoi(interpolation));
+					// Switch the value according to the type:
+					if (value) {
+						assert(track->type == TRACK_FLOAT);
+						k.value.val = (float)(my_atof(value));
+					}
+					if (event) {
+						assert(track->type == TRACK_EVENT);
+						k.value.event = (unsigned char)strtoul(event, 0, 16);
+					}
+					if (colour) {
+						assert(track->type == TRACK_COLOUR);
+						k.value.colour = (unsigned short)strtoul(colour, 0, 16);
+					}
+					k.type = (atoi(interpolation));
 
                     // if track is muted we load the data into the muted data and not the regular keys
 
@@ -321,13 +345,35 @@ static void setElementFloat(mxml_node_t* node, char* attr, float v) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static void saveTrackData(mxml_node_t* track, struct track_key* keys, int count) {
+static void setElementForValue(mxml_node_t* key, key_value value, enum track_type type, const char *prefix)
+{
+	char temp[256];
+	switch (type) {
+	case TRACK_FLOAT:
+	default:
+		sprintf_s(temp, 256, "%sval", prefix);
+		setElementFloat(key, temp, value.val);
+		break;
+
+	case TRACK_EVENT:
+		sprintf_s(temp, 256, "%sevent", prefix);
+		setElementInt(key, "event", "%02x", value.event);
+		break;
+
+	case TRACK_COLOUR:
+		sprintf_s(temp, 256, "%scolour", prefix);
+		setElementInt(key, "colour", "%04x", value.colour);
+		break;
+	}
+}
+
+static void saveTrackData(mxml_node_t* track, struct track_key* keys, int count, enum track_type type) {
     int i;
 
     for (i = 0; i < count; ++i) {
         mxml_node_t* key = mxmlNewElement(track, "key");
         setElementInt(key, "row", "%d", keys[i].row);
-        setElementFloat(key, "value", keys[i].value);
+		setElementForValue(key, keys[i].value, type, "");
         setElementInt(key, "interpolation", "%d", (int)keys[i].type);
     }
 }
@@ -416,12 +462,13 @@ int LoadSave_saveRocketXML(const text_t* path, TrackData* trackData) {
         mxmlElementSetAttr(track, "folded", trackData->tracks[p].folded ? "1" : "0");
         setElementInt(track, "muteKeyCount", "%d", trackData->tracks[p].muteKeyCount);
         setElementInt(track, "color", "%08x", trackData->tracks[p].color);
+		setElementInt(track, "type", "%d", t->type); // TODO: Store as string?
 
         if (isMuted) {
-            setElementFloat(track, "muteValue", t->keys[0].value);
-            saveTrackData(track, trackData->tracks[p].muteBackup, trackData->tracks[p].muteKeyCount);
+			setElementForValue(track, t->keys[0].value, t->type, "mute_");
+            saveTrackData(track, trackData->tracks[p].muteBackup, trackData->tracks[p].muteKeyCount, t->type);
         } else {
-            saveTrackData(track, t->keys, t->num_keys);
+            saveTrackData(track, t->keys, t->num_keys, t->type);
         }
     }
 
