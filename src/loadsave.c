@@ -104,6 +104,7 @@ static void parseXml(mxml_node_t* rootNode, TrackData* trackData) {
                     struct sync_track* track;
                     key_value muteValue;
                     Track* t;
+					int type = 0;	// default to TRACK_FLOAT if no track type specified.
 
                     // TODO: Create the new track/channel here
 
@@ -116,7 +117,10 @@ static void parseXml(mxml_node_t* rootNode, TrackData* trackData) {
 					const char* mute_colour_text = mxmlElementGetAttr(node, "mute_colour");
 					const char* type_text = mxmlElementGetAttr(node, "type");
 
-					track_index = TrackData_createGetTrack(trackData, track_name, strtoul(type_text, 0, 10));
+					if (type_text)
+						type = strtoul(type_text, 0, 10);
+
+					track_index = TrackData_createGetTrack(trackData, track_name, type);
 
                     t = &trackData->tracks[track_index];
                     track = trackData->syncTracks[track_index];
