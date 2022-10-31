@@ -90,11 +90,10 @@ void TrackView_init() {
 
 static int getTrackMinSize(const Track* trackData) {
 	if (!trackData)
-		return min_track_size;
+		return track_size_folded;
 
 	switch (trackData->type) {
 	case TRACK_FLOAT:
-	default:
 		return min_track_size;
 
 	case TRACK_EVENT:
@@ -104,6 +103,9 @@ static int getTrackMinSize(const Track* trackData) {
 	case TRACK_COLOUR:
 		return min_colour_size;
 		break;
+
+	default:
+		return track_size_folded;
 	}
 }
 
@@ -217,8 +219,8 @@ static void drawFoldButton(int x, int y, bool* fold, bool active) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static int renderName(const char* name, int x, int y, int minSize, bool folded, bool active) {
-    int size = min_track_size;
+static int renderName(const char* name, int x, int y, int minSize, int minTrackSize, bool folded, bool active) {
+    int size = minTrackSize;
     int text_size_full;
     int text_size;
     int x_adjust = 0;
@@ -252,7 +254,7 @@ static int renderGroupHeader(Group* group, int x, int y, int groupSize, int wind
         groupSize = windowSizeX - x;
 
     drawColorButton(Emgui_color32(127, 127, 127, 255), x + 3, y - colorbar_adjust, groupSize);
-    renderName(group->displayName, x, y - name_adjust, groupSize, group->folded, true);
+    renderName(group->displayName, x, y - name_adjust, groupSize, min_track_size, group->folded, true);
 
     return 0;
 }
@@ -424,7 +426,7 @@ static int renderChannel(struct TrackInfo* info, int startX, Track* trackData, b
 		if (info->trackData->syncTracks)
 			track = info->trackData->syncTracks[trackData->index];
 
-        size = renderName(trackData->displayName, startX, info->startY - (font_size * 2), minSize, folded,
+        size = renderName(trackData->displayName, startX, info->startY - (font_size * 2), minSize, minSize, folded,
                           trackData->active);
 
         if (folded) {
